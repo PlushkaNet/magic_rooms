@@ -10,8 +10,10 @@ or
 go build gocl.go
 ```
 
-Server runs on port 10500 by default
+# Server configuration
+You can apply couple of different settings to server, such as port (with -p argument), mode (-m tls | none) and certificate+key (-cert /path/to/cert -key /path/to/key)
 
-Secure server searches for certificates (cert.pem, key.pem) in the same path as the executable
-
-Note: tls/client currently works only with domains
+Example of starting secured server over TLS:
+```
+./main -p 10500 -m tls -cert /path/to/cert -key /path/to/key
+```

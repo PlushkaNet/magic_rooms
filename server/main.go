@@ -1,8 +1,13 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -12,10 +17,11 @@ type Room struct {
 	queue uint
 }
 
-func (r *Room) New() *Room {
-	r.mutx = sync.Mutex{}
-	r.users = map[string]net.Conn{}
-	return r
+func NewRoom() *Room {
+	room := Room{}
+	room.mutx = sync.Mutex{}
+	room.users = map[string]net.Conn{}
+	return &room
 }
 
 func (r *Room) AddUser(conn net.Conn, id string) {
@@ -74,10 +80,11 @@ type RoomsType struct {
 	rooms map[string]*Room
 }
 
-func (rt *RoomsType) New() *RoomsType {
+func NewRoomsType() *RoomsType {
+	rt := RoomsType{}
 	rt.mutx = sync.Mutex{}
 	rt.rooms = map[string]*Room{}
-	return rt
+	return &rt
 }
 
 func (rt *RoomsType) NewRoom(roomId string, room *Room) {
@@ -131,7 +138,7 @@ func joinRoom(conn net.Conn, room_id string) {
 
 	if !ok {
 		fmt.Fprint(conn, "c") // creates new
-		room = new(Room).New()
+		room = NewRoom()
 		rooms.NewRoom(room_id, room)
 	} else {
 		fmt.Fprintf(conn, "j%d", room.GetUserCount()) // joined to an existing one and sends members count
@@ -187,15 +194,79 @@ func handleConnection(conn net.Conn) {
 	joinRoom(conn, roomId)
 }
 
+func parseArguments(args []string) map[string]string {
+	kwargs := map[string]string{}
+	argsLen := len(args)
+
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			if (argsLen - i) > 1 {
+				kwargs[strings.TrimPrefix(arg, "-")] = args[i+1]
+			}
+		}
+	}
+
+	return kwargs
+}
+
 func main() {
 	// initializing rooms
-	rooms = new(RoomsType).New()
+	rooms = NewRoomsType()
 
-	//starting server
-	listener, err := net.Listen("tcp", ":10500")
+	// parsing kwargs
+	kwargs := parseArguments(os.Args)
 
-	if err != nil {
-		return
+	port := kwargs["p"]
+
+	if port == "" {
+		log.Println("No port specified, using standart 10500")
+		port = ":10500"
+	} else {
+		_, err := strconv.Atoi(port) // checking that port has valid int type
+
+		if err != nil {
+			log.Fatalln("Invalid port specified")
+		}
+
+		log.Printf("Using explicitly specified port %s\n", port)
+
+		port = ":" + port
+	}
+
+	var listener net.Listener
+
+	// setting up TLS server
+	if kwargs["m"] == "tls" {
+		cert := kwargs["cert"]
+		key := kwargs["key"]
+
+		if cert == "" || key == "" {
+			log.Fatalln("You must specify -cert and -key to run in TLS mode")
+		}
+
+		log.Println("Trying to load certificates")
+
+		pair, err := tls.LoadX509KeyPair(cert, key)
+
+		if err != nil {
+			log.Fatalln("Cannot load specified certificates")
+		}
+
+		log.Println("Starting secured server")
+
+		listener, err = tls.Listen("tcp", port, &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{pair}})
+
+		if err != nil {
+			log.Fatalf("Failed to start secured server: %s", err.Error())
+		}
+	} else {
+		// else setting up normal tcp server
+		log.Println("Starting server")
+		var err error
+		listener, err = net.Listen("tcp", port)
+		if err != nil {
+			log.Fatalf("Failed to start server: %s", err.Error())
+		}
 	}
 	defer listener.Close()
 
