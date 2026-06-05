@@ -17,3 +17,16 @@ Example of starting secured server over TLS:
 ```
 ./main -p 10500 -m tls -cert /path/to/cert -key /path/to/key
 ```
+
+# Client configuration
+There are two supported command line arguments for client:
+
+<pre>
+&nbsp;-addr &lt;addr&gt;    ; to specify custom address for client to join to
+&nbsp;-m &lt;tls | none&gt; ; to specify, should client use tls mode or standart insecure
+</pre>
+
+Example of usage:
+```
+./gocl -addr 127.0.0.1:10500 -m tls
+```

@@ -40,16 +40,33 @@ func listenForMessages(conn net.Conn) {
 	}
 }
 
+func parseArguments(args []string) map[string]string {
+	kwargs := map[string]string{}
+	argsLen := len(args)
+
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			if (argsLen - i) > 1 {
+				kwargs[strings.TrimPrefix(arg, "-")] = args[i+1]
+			}
+		}
+	}
+
+	return kwargs
+}
+
 func main() {
+	kwargs := parseArguments(os.Args)
+
 	var address string
-	if len(os.Args) > 1 {
-		fmt.Printf("System arguments specified, using first argument as address: %s\n", os.Args[1])
-		address = os.Args[1]
+	if kwargs["addr"] != "" {
+		address = kwargs["addr"]
+		fmt.Printf("addr specified, using address: %s\n", address)
 	} else {
-		fmt.Printf("No arguments specified, what address we should connect?\n")
+		fmt.Printf("What address we should connect?\n")
 		_, err := fmt.Scan(&address)
 		if err != nil {
-			fmt.Printf("Error occured while reading CMDIN: %s\n", err.Error())
+			fmt.Printf("Error occured while reading input: %s\n", err.Error())
 			return
 		}
 		if address == "" {
@@ -58,12 +75,20 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Trying to connect to %s\n\n", address)
+	fmt.Printf("Trying to connect to %s\n", address)
 
-	// TODO rewrite
-	conn, err := tls.Dial("tcp", address, &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		ServerName: strings.Split(address, ":")[0]})
+	var conn net.Conn
+	var err error
+
+	if kwargs["m"] == "tls" {
+		fmt.Println("Connection mode switched to TLS")
+
+		conn, err = tls.Dial("tcp", address, &tls.Config{MinVersion: tls.VersionTLS12})
+	} else {
+		fmt.Print("\n! Using basic insecure mode\n! You can switch to TLS mode using -m tls flag in command line arguments\n\n")
+
+		conn, err = net.Dial("tcp", address)
+	}
 
 	if err != nil {
 		fmt.Println("Error while connecting to the server")
@@ -130,7 +155,7 @@ func main() {
 	n, err := conn.Read(buffer)
 
 	if err != nil || n == 0 {
-		fmt.Printf("Error while waiting response from the server: %s", err.Error())
+		fmt.Printf("Error while waiting response from the server: %s\n", err.Error())
 		return
 	}
 
