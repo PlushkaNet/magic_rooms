@@ -3,11 +3,7 @@
 
 To build, just locate into direcory with server or client and run
 ```
-go build main.go
-```
-or 
-```
-go build gocl.go
+go build
 ```
 
 # Server configuration
@@ -16,6 +12,11 @@ You can apply couple of different settings to server, such as port (with -p argu
 Example of starting secured server over TLS:
 ```
 ./main -p 10500 -m tls -cert /path/to/cert -key /path/to/key
+```
+
+You can see server version before the start using:
+```
+./main -i v
 ```
 
 # Client configuration

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"fmt"
 	"log"
@@ -9,6 +10,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+)
+
+const (
+	MAX_SERVER_VER    = 2 // current SERVER_VER
+	MIN_SERVER_VER    = 2 // minimal supported SERVER_VER that clients support to work with
+	SERVER_HELLO      = "rooms2"
+	CLIENT_HELLO_PART = "rmcl"
 )
 
 type Room struct {
@@ -178,8 +186,48 @@ func joinRoom(conn net.Conn, room_id string) {
 	}
 }
 
+func serveHello(conn net.Conn) bool {
+	// process client hello
+	clientHelloBuffer := make([]byte, 8)
+	_, err := conn.Read(clientHelloBuffer)
+
+	if err != nil {
+		return false // failed to serve client hello
+	}
+
+	clientHelloString := string(bytes.Trim(clientHelloBuffer, "\x00"))
+
+	if !strings.HasPrefix(clientHelloString, CLIENT_HELLO_PART) {
+		return false // unknown client hello
+	}
+
+	clientSupportsServerVerString, _ := strings.CutPrefix(clientHelloString, CLIENT_HELLO_PART)
+	clientSupportsServerVer, err := strconv.Atoi(clientSupportsServerVerString)
+
+	if err != nil {
+		return false // cannot read client version
+	}
+
+	// server hello
+	fmt.Fprintf(conn, SERVER_HELLO)
+
+	if (clientSupportsServerVer-MAX_SERVER_VER) > 0 || (clientSupportsServerVer-MIN_SERVER_VER) < 0 {
+		return false // drop connection on version mismath
+	}
+
+	return true
+}
+
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
+
+	helloSuccessed := serveHello(conn)
+
+	if !helloSuccessed {
+		return // drop connection on hello fail
+	}
+
+	// else proceed
 
 	buffer := make([]byte, 128)
 
@@ -215,6 +263,11 @@ func main() {
 
 	// parsing kwargs
 	kwargs := parseArguments(os.Args)
+
+	// version
+	if kwargs["i"] == "v" {
+		fmt.Printf("Minimal: %d\nCurrent: %d\nServerHello: %s\n", MIN_SERVER_VER, MAX_SERVER_VER, SERVER_HELLO)
+	}
 
 	port := kwargs["p"]
 

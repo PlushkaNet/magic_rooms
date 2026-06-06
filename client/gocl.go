@@ -13,10 +13,12 @@ import (
 	"time"
 )
 
-const PROTOCOL_V int = 1
-const symbols string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-const BUFFER_SIZE uint = 1024
+const (
+	CLIENT_HELLO_PART string = "rmcl"
+	SUPPORT_V         int    = 2
+	symbols           string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	BUFFER_SIZE       uint   = 1024
+)
 
 func generateRandomString(n int, r *rand.Rand) string {
 	result := ""
@@ -104,8 +106,43 @@ func main() {
 	// 	return
 	// }
 
+	_, err = fmt.Fprintf(conn, "%s%d", CLIENT_HELLO_PART, SUPPORT_V)
+
+	if err != nil {
+		fmt.Printf("Error while writing client hello: %s\n", err.Error())
+		return
+	}
+
+	buffer := make([]byte, 10)
+
+	_, err = conn.Read(buffer)
+
+	if err != nil {
+		fmt.Printf("Error while reading server hello: %s\n", err.Error())
+		return
+	}
+
+	serverHelloString := string(bytes.Trim(buffer, "\x00"))
+
+	if !strings.HasPrefix(serverHelloString, "rooms") {
+		fmt.Println("ERROR: cannot validate server hello, exiting")
+		return
+	}
+
+	serverVersionString, _ := strings.CutPrefix(serverHelloString, "rooms")
+	serverVersion, err := strconv.Atoi(serverVersionString)
+
+	if err != nil {
+		fmt.Println("Error while processing server hello: cannot convert version string to integer")
+		return
+	}
+
+	if serverVersion != SUPPORT_V {
+		fmt.Printf("Server has different version from that client supports, communication may not work or work unproperly\nServer version: %d\n", serverVersion)
+	}
+
 	fmt.Printf("Connected successfully;\nremote address: %s\nlocal  address: %s\n\n", conn.RemoteAddr().String(), conn.LocalAddr().String())
-	fmt.Printf("Using protocol version %d\n", PROTOCOL_V)
+	fmt.Printf("Using protocol version %d\n", SUPPORT_V)
 
 	fmt.Print("Do you know your room? (y/N): ")
 
@@ -151,7 +188,7 @@ func main() {
 		return
 	}
 
-	buffer := make([]byte, 16)
+	buffer = make([]byte, 16)
 	n, err := conn.Read(buffer)
 
 	if err != nil || n == 0 {
