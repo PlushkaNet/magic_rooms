@@ -131,7 +131,7 @@ func requestUsername(conn net.Conn, room *Room) string {
 			return ""
 		}
 
-		uid := string(buffer)
+		uid := string(bytes.Trim(buffer, "\x00"))
 
 		if !room.UserExists(uid) {
 			fmt.Fprint(conn, "n") // new
@@ -169,6 +169,7 @@ func joinRoom(conn net.Conn, room_id string) {
 		buffer := make([]byte, 1024)
 
 		n, err := conn.Read(buffer)
+		buffer = bytes.Trim(buffer, "\x00")
 
 		if err != nil || n == 0 {
 			room.DeleteUser(uid)
